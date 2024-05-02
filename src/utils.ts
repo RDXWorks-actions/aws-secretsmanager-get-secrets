@@ -7,6 +7,7 @@ import {
     ListSecretsCommandInput
 } from "@aws-sdk/client-secrets-manager";
 import { CLEANUP_NAME, LIST_SECRETS_MAX_RESULTS } from "./constants";
+import "aws-sdk-client-mock-jest";
 
 export interface SecretValueResponse {
     name: string,
@@ -137,8 +138,14 @@ export function injectSecret(secretName: string, secretValue: string, parseJsonS
         for (const k in secretMap) {
             const keyValue = typeof secretMap[k] === 'string' ? secretMap[k] as string : JSON.stringify(secretMap[k]);
 
-            // Append the current key to the name of the env variable
-            const newEnvName = `${tempEnvName || transformToValidEnvName(secretName)}_${transformToValidEnvName(k)}`;
+            // Append the current key to the name of the env variable and check to avoid prepending an underscore
+            const newEnvName = [
+                tempEnvName || transformToValidEnvName(secretName),
+                transformToValidEnvName(k)
+            ]
+            .filter(elem => elem) // Uses truthy-ness of elem to determine if it remains
+            .join("_"); // Join the remaining elements with an underscore
+
             secretsToCleanup = [...secretsToCleanup, ...injectSecret(secretName, keyValue, parseJsonSecrets, newEnvName)];
         }
     } else {
@@ -204,7 +211,7 @@ export function isSecretArn(secretId: string): boolean {
 /*
  * Separates a secret alias from the secret name/arn, if one was provided
  */
-export function extractAliasAndSecretIdFromInput(input: string): [string, string] {
+export function extractAliasAndSecretIdFromInput(input: string): [undefined | string, string] {
     const parsedInput = input.split(',');
     if (parsedInput.length > 1){
         const alias = parsedInput[0].trim();
@@ -221,7 +228,7 @@ export function extractAliasAndSecretIdFromInput(input: string): [string, string
     }
 
     // No alias
-    return [ '', input.trim() ];
+    return [ undefined , input.trim() ];
 }
 
 /*
